@@ -18,13 +18,17 @@ type SafeCounter struct {
 	// TODO 1: Add a sync.Mutex field named "mu"
 	// TODO 2: Add an int field named "count"
 	// Your code here:
+	mu    sync.Mutex
+	count int
 }
 
 // Increment adds 1 to the counter safely
 func (c *SafeCounter) Increment() {
 	// TODO 3: Lock the mutex before touching c.count, unlock after
 	// Your code here:
+	c.mu.Lock()
 	c.count++ // this line is fine, just add lock/unlock around it
+	c.mu.Unlock()
 }
 
 // Value returns the current count safely
@@ -32,6 +36,8 @@ func (c *SafeCounter) Value() int {
 	// TODO 4: Lock the mutex before reading c.count, unlock after
 	// Hint: use defer for the unlock!
 	// Your code here:
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.count
 }
 
@@ -52,6 +58,16 @@ func main() {
 	//   e) Print counter.Value()
 	//
 	// Your code here:
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counter.Increment()
+		}()
+		wg.Wait()
+		fmt.Println("Counter value:", counter.Value())
+	}
 
 	fmt.Println("--- Exercise 2: Parallel Results Collection ---")
 
@@ -64,6 +80,24 @@ func main() {
 	// Expected output (any order): [1 4 9 16 25]
 	//
 	// Your code here:
+	var (
+		mu      sync.Mutex
+		wg2     sync.WaitGroup
+		results []int
+	)
+	for i := 1; i <= 5; i++ {
+		wg2.Add(1)
+		go func(number int) {
+			defer wg2.Done()
+			square := number * number
+
+			mu.Lock()
+			results = append(results, square)
+			mu.Unlock()
+		}(i)
+	}
+	wg2.Wait()
+	fmt.Println("Results:", results)
 
 	fmt.Println("--- Exercise 3: Race Condition Detection ---")
 	// This code has a race condition. Run it with:
@@ -71,16 +105,21 @@ func main() {
 	// You should see a WARNING from the race detector.
 	// Then fix it by adding a mutex.
 
-	var shared int
-	var wg2 sync.WaitGroup
+	var (
+		fixMu  sync.Mutex
+		shared int
+		wg3    sync.WaitGroup
+	)
 
 	for i := 0; i < 100; i++ {
-		wg2.Add(1)
+		wg3.Add(1)
 		go func() {
-			defer wg2.Done()
-			shared++ // ← RACE CONDITION! Fix this with a mutex.
+			defer wg3.Done()
+			fixMu.Lock()
+			shared++
+			fixMu.Unlock()
 		}()
 	}
-	wg2.Wait()
-	fmt.Println("Shared value (with race condition):", shared) // might not be 100!
+	wg3.Wait()
+	fmt.Println("Shared value (fixed):", shared) // Always 100
 }
